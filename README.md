@@ -1,5 +1,4 @@
-# anonymous-message
-<!DOCTYPE html>
+
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -23,7 +22,6 @@
             margin: 0 auto;
         }
 
-        /* Header */
         .header {
             background: white;
             padding: 20px;
@@ -38,7 +36,16 @@
             margin-bottom: 10px;
         }
 
-        /* Stats */
+        .online-users {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 5px 15px;
+            border-radius: 20px;
+            display: inline-block;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
         .stats {
             display: flex;
             gap: 10px;
@@ -60,7 +67,6 @@
             color: #1a73e8;
         }
 
-        /* Form */
         .form-box {
             background: white;
             padding: 20px;
@@ -77,6 +83,7 @@
             border-radius: 4px;
             margin-bottom: 10px;
             font-size: 14px;
+            resize: vertical;
         }
 
         textarea:focus {
@@ -108,7 +115,6 @@
             background: #6c757d;
         }
 
-        /* Filters */
         .filters {
             background: white;
             padding: 15px;
@@ -133,13 +139,13 @@
             color: white;
         }
 
-        /* Messages */
         .messages-box {
             background: white;
             padding: 20px;
             border-radius: 8px;
             margin-bottom: 20px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            min-height: 200px;
         }
 
         .message {
@@ -201,7 +207,6 @@
             color: #999;
         }
 
-        /* Contact Section */
         .contact {
             background: white;
             padding: 20px;
@@ -227,17 +232,31 @@
             padding-top: 10px;
             border-top: 1px solid #eee;
         }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
         <div class="header">
             <h1>📝 Anonymous Message Board</h1>
             <p>Share your thoughts anonymously</p>
+            <div class="online-users" id="onlineUsers">🟢 0 users online</div>
         </div>
 
-        <!-- Stats -->
         <div class="stats">
             <div class="stat-box">
                 <div class="stat-number" id="totalMessages">0</div>
@@ -253,31 +272,30 @@
             </div>
         </div>
 
-        <!-- Post Form -->
         <div class="form-box">
+            <div id="errorDisplay" class="error-message" style="display: none;"></div>
             <textarea id="messageInput" placeholder="Type your message here..." maxlength="500"></textarea>
             <div class="form-footer">
                 <div>
                     <button class="clear-btn" onclick="clearInput()">Clear</button>
-                    <button onclick="postMessage()">Post</button>
+                    <button onclick="postMessage()" id="postBtn">Post Message</button>
                 </div>
                 <span id="charCount">0/500</span>
             </div>
         </div>
 
-        <!-- Filters -->
         <div class="filters">
-            <button class="filter-btn active" onclick="filterMessages('all', this)">All</button>
-            <button class="filter-btn" onclick="filterMessages('today', this)">Today</button>
-            <button class="filter-btn" onclick="filterMessages('popular', this)">Popular</button>
+            <button class="filter-btn active" onclick="filterMessages('all', this)">All Messages</button>
+            <button class="filter-btn" onclick="filterMessages('today', this)">Today's Messages</button>
+            <button class="filter-btn" onclick="filterMessages('popular', this)">Most Liked</button>
         </div>
 
-        <!-- Messages -->
         <div class="messages-box">
-            <div id="messageList"></div>
+            <div id="messageList">
+                <div class="loading">Loading messages...</div>
+            </div>
         </div>
 
-        <!-- Contact -->
         <div class="contact">
             <h3>Contact Information</h3>
             <a href="https://www.facebook.com/share/17RCyCLQHs/" target="_blank" class="facebook-link">
@@ -290,96 +308,169 @@
         </div>
     </div>
 
-    <script>
-        // Initialize
-        let messages = [];
-        let currentFilter = 'all';
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
-        // Load messages
-        function loadMessages() {
-            let saved = localStorage.getItem('messages');
-            if (saved) {
-                messages = JSON.parse(saved);
-            } else {
-                // Sample messages
-                messages = [
-                    {
-                        id: 1,
-                        text: "Hello! This is a sample message.",
-                        time: new Date().toISOString(),
-                        author: "Anon1234",
-                        likes: 5
-                    },
-                    {
-                        id: 2,
-                        text: "Having a great day!",
-                        time: new Date(Date.now() - 3600000).toISOString(),
-                        author: "Anon5678",
-                        likes: 3
-                    }
-                ];
-                saveMessages();
-            }
-            updateAll();
+    <script>
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDy1xqI7QqzLrU8F9W9W9W9W9W9W9W9W9W9",
+            authDomain: "anonymous-board-12345.firebaseapp.com",
+            databaseURL: "https://anonymous-board-12345-default-rtdb.firebaseio.com",
+            projectId: "anonymous-board-12345",
+            storageBucket: "anonymous-board-12345.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:abc123def456ghi789"
+        };
+
+        // Initialize Firebase with error handling
+        let database;
+        try {
+            firebase.initializeApp(firebaseConfig);
+            database = firebase.database();
+            console.log("Firebase initialized successfully");
+        } catch (error) {
+            console.error("Firebase initialization error:", error);
+            showError("Failed to connect to database. Please refresh the page.");
         }
 
-        // Save messages
-        function saveMessages() {
-            localStorage.setItem('messages', JSON.stringify(messages));
+        // Global variables
+        let messages = [];
+        let currentFilter = 'all';
+        let userId = 'user_' + Math.floor(Math.random() * 1000000);
+
+        // Show error message
+        function showError(message) {
+            const errorDiv = document.getElementById('errorDisplay');
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = message;
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // Load messages from Firebase
+        function loadMessages() {
+            if (!database) {
+                showError("Database not connected");
+                return;
+            }
+
+            database.ref('messages').on('value', (snapshot) => {
+                const data = snapshot.val();
+                console.log("Data received:", data);
+                
+                if (data) {
+                    // Convert object to array
+                    messages = Object.keys(data).map(key => ({
+                        id: key,
+                        ...data[key]
+                    }));
+                    // Sort by timestamp (newest first)
+                    messages.sort((a, b) => b.timestamp - a.timestamp);
+                } else {
+                    messages = [];
+                }
+                
+                updateDisplay();
+                updateStats();
+            }, (error) => {
+                console.error("Firebase error:", error);
+                showError("Failed to load messages. Please refresh.");
+            });
         }
 
         // Post message
         function postMessage() {
-            let input = document.getElementById('messageInput');
-            let text = input.value.trim();
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            
+            if (!database) {
+                showError("Database not connected");
+                return;
+            }
             
             if (text === '') {
-                alert('Please enter a message');
+                showError('Please enter a message');
                 return;
             }
             
             if (text.length > 500) {
-                alert('Message too long');
+                showError('Message too long (max 500 characters)');
                 return;
             }
-            
-            // Create new message
-            let newMessage = {
-                id: Date.now(),
+
+            // Disable post button temporarily
+            const postBtn = document.getElementById('postBtn');
+            postBtn.disabled = true;
+            postBtn.textContent = 'Posting...';
+
+            const newMessage = {
                 text: text,
-                time: new Date().toISOString(),
                 author: 'Anon' + Math.floor(Math.random() * 10000),
-                likes: 0
+                likes: 0,
+                timestamp: Date.now(),
+                time: new Date().toISOString()
             };
-            
-            messages.unshift(newMessage);
-            saveMessages();
-            
-            // Clear input
-            input.value = '';
-            document.getElementById('charCount').innerHTML = '0/500';
-            
-            updateAll();
-            alert('Message posted!');
+
+            console.log("Posting message:", newMessage);
+
+            // Save to Firebase
+            database.ref('messages').push(newMessage)
+                .then(() => {
+                    console.log("Message posted successfully");
+                    input.value = '';
+                    document.getElementById('charCount').innerHTML = '0/500';
+                    postBtn.disabled = false;
+                    postBtn.textContent = 'Post Message';
+                })
+                .catch((error) => {
+                    console.error("Error posting message:", error);
+                    showError('Error posting message. Please try again.');
+                    postBtn.disabled = false;
+                    postBtn.textContent = 'Post Message';
+                });
         }
 
         // Delete message
         function deleteMessage(id) {
+            if (!database) {
+                showError("Database not connected");
+                return;
+            }
+            
             if (confirm('Delete this message?')) {
-                messages = messages.filter(m => m.id !== id);
-                saveMessages();
-                updateAll();
+                database.ref('messages/' + id).remove()
+                    .then(() => {
+                        console.log("Message deleted successfully");
+                    })
+                    .catch((error) => {
+                        console.error("Error deleting message:", error);
+                        showError('Error deleting message');
+                    });
             }
         }
 
         // Like message
         function likeMessage(id) {
-            let message = messages.find(m => m.id === id);
-            if (message) {
-                message.likes++;
-                saveMessages();
-                updateAll();
+            if (!database) {
+                showError("Database not connected");
+                return;
             }
+            
+            const messageRef = database.ref('messages/' + id);
+            messageRef.once('value', (snapshot) => {
+                const message = snapshot.val();
+                if (message) {
+                    messageRef.update({
+                        likes: (message.likes || 0) + 1
+                    }).catch((error) => {
+                        console.error("Error liking message:", error);
+                        showError('Error liking message');
+                    });
+                }
+            });
         }
 
         // Clear input
@@ -401,56 +492,50 @@
             updateDisplay();
         }
 
-        // Update all
-        function updateAll() {
-            updateDisplay();
-            updateStats();
-        }
-
         // Update display
         function updateDisplay() {
-            let list = document.getElementById('messageList');
-            let filtered = [];
+            const list = document.getElementById('messageList');
             
+            if (!messages || messages.length === 0) {
+                list.innerHTML = '<div class="empty-state">No messages yet. Be the first to post!</div>';
+                return;
+            }
+
             // Apply filter
-            if (currentFilter === 'all') {
-                filtered = messages;
-            } 
-            else if (currentFilter === 'today') {
-                let today = new Date().toDateString();
-                filtered = messages.filter(m => {
-                    return new Date(m.time).toDateString() === today;
+            let filteredMessages = [...messages];
+            
+            if (currentFilter === 'today') {
+                const today = new Date().toDateString();
+                filteredMessages = messages.filter(m => {
+                    return m.time && new Date(m.time).toDateString() === today;
                 });
-            }
-            else if (currentFilter === 'popular') {
-                filtered = [...messages].sort((a, b) => b.likes - a.likes);
+            } else if (currentFilter === 'popular') {
+                filteredMessages = [...messages].sort((a, b) => (b.likes || 0) - (a.likes || 0));
             }
             
-            // Show messages
-            if (filtered.length === 0) {
-                list.innerHTML = '<div class="empty-state">No messages to display</div>';
+            if (filteredMessages.length === 0) {
+                list.innerHTML = '<div class="empty-state">No messages in this filter</div>';
                 return;
             }
             
             let html = '';
-            for (let i = 0; i < filtered.length; i++) {
-                let m = filtered[i];
+            filteredMessages.forEach(message => {
                 html += `
                     <div class="message">
-                        <div class="message-text">${escapeHtml(m.text)}</div>
+                        <div class="message-text">${escapeHtml(message.text || '')}</div>
                         <div class="message-footer">
                             <div class="message-info">
-                                <span class="message-id">${m.author}</span>
-                                <span>${formatTime(m.time)}</span>
+                                <span class="message-id">${escapeHtml(message.author || 'Anonymous')}</span>
+                                <span>${formatTime(message.time)}</span>
                             </div>
                             <div class="message-actions">
-                                <button class="like-btn" onclick="likeMessage(${m.id})">❤️ ${m.likes}</button>
-                                <button class="delete-btn" onclick="deleteMessage(${m.id})">🗑️</button>
+                                <button class="like-btn" onclick="likeMessage('${message.id}')">❤️ ${message.likes || 0}</button>
+                                <button class="delete-btn" onclick="deleteMessage('${message.id}')">🗑️</button>
                             </div>
                         </div>
                     </div>
                 `;
-            }
+            });
             
             list.innerHTML = html;
         }
@@ -459,27 +544,23 @@
         function updateStats() {
             document.getElementById('totalMessages').innerHTML = messages.length;
             
-            let today = new Date().toDateString();
-            let todayCount = 0;
-            for (let i = 0; i < messages.length; i++) {
-                if (new Date(messages[i].time).toDateString() === today) {
-                    todayCount++;
-                }
-            }
+            const today = new Date().toDateString();
+            const todayCount = messages.filter(m => {
+                return m.time && new Date(m.time).toDateString() === today;
+            }).length;
             document.getElementById('todayMessages').innerHTML = todayCount;
             
-            let totalLikes = 0;
-            for (let i = 0; i < messages.length; i++) {
-                totalLikes += messages[i].likes;
-            }
+            const totalLikes = messages.reduce((sum, m) => sum + (m.likes || 0), 0);
             document.getElementById('totalLikes').innerHTML = totalLikes;
         }
 
         // Format time
         function formatTime(timestamp) {
-            let date = new Date(timestamp);
-            let now = new Date();
-            let diff = Math.floor((now - date) / 60000); // minutes
+            if (!timestamp) return 'Unknown';
+            
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 60000);
             
             if (diff < 1) return 'Just now';
             if (diff < 60) return diff + ' min ago';
@@ -489,12 +570,10 @@
 
         // Escape HTML
         function escapeHtml(text) {
-            return text
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         // Character counter
@@ -502,16 +581,43 @@
             document.getElementById('charCount').innerHTML = this.value.length + '/500';
         });
 
-        // Load on start
-        loadMessages();
-
-        // Check for updates from other tabs
-        window.addEventListener('storage', function(e) {
-            if (e.key === 'messages') {
-                messages = JSON.parse(e.newValue);
-                updateAll();
+        // Enter key to post
+        document.getElementById('messageInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                postMessage();
             }
         });
+
+        // Track online users
+        function updateOnlineStatus() {
+            if (!database) return;
+            
+            const userRef = database.ref('online/' + userId);
+            
+            userRef.set({
+                online: true,
+                lastSeen: Date.now()
+            });
+
+            window.addEventListener('beforeunload', () => {
+                userRef.remove();
+            });
+
+            database.ref('online').on('value', (snapshot) => {
+                const users = snapshot.val();
+                const count = users ? Object.keys(users).length : 0;
+                document.getElementById('onlineUsers').innerHTML = `🟢 ${count} users online`;
+            });
+        }
+
+        // Initialize
+        if (database) {
+            loadMessages();
+            updateOnlineStatus();
+        } else {
+            document.getElementById('messageList').innerHTML = '<div class="error-message">Failed to connect to database. Please refresh the page.</div>';
+        }
     </script>
 </body>
 </html>
